@@ -1,7 +1,7 @@
 # richlite-client
 我的世界.cc 服务器 RichLite 客户端发布：Windows / macOS / Linux / Android 启动器导入包、校验文件和安装说明。
 
-公开说明更新：2026-11-02T07:32:00+09:00（Asia/Tokyo）。
+公开说明更新：2026-11-02T08:30:00+09:00（Asia/Tokyo）。
 
 下载请前往 [RichLite 0.3.1 发布页](https://github.com/324641aliyun/richlite-client/releases/tag/v0.3.1)。ZIP 由 GitHub Releases 提供，玩家下载不经过官网笔记本。请选择 Desktop 或 Android 文件，并核对同名 `.sha256` 校验文件。
 
@@ -14,3 +14,5 @@
 0.3.1 为跨平台导入候选发布：打包、CRC 和逐文件 SHA256 已核查；新导入包尚未在四个平台全部实机启动。macOS、Linux 和 Android 的实际运行、驱动适配与进服仍需设备测试。已有 Windows 0.3.0 客户端具有真实公网进服记录，玩法版本与服务器保持兼容。
 
 请导入新实例，保留原存档。ZIP 内包含安装步骤、逐文件清单、第三方许可及本服修改源码；不含个人账号、登录令牌、存档、Minecraft 本体或平台专用 Java。第三方内容继续遵守各自许可证，本仓库不替第三方重新授权。
+
+已完成验收（2026-11-02T08:20:58+09:00）：两个 ZIP 都已从 GitHub CDN 完整下载并核对 SHA256，通过 206 范围下载。官方 HMCL 3.16.4 直接导入 Desktop ZIP 成功，自动安装指定 Minecraft／NeoForge，1671 个 overrides 文件逐 SHA256 一致、377 个模组完整。Windows 新 ZIP 在独立目录实际进入 NeoForge 主菜单并正常退出；此测试未添加账号或连接服务器，macOS／Linux／Android 实机范围仍如上所述。
