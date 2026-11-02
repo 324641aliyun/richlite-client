@@ -19,14 +19,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if gh release view v0.4.1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo 'Release v0.4.1 already exists; refusing to replace assets.'
-            exit 1
-          fi
+          RELEASE_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq '.[] | select(.tag_name=="v0.4.1") | .id' | head -n 1)
           (cd native-menu && sha256sum richlite-menu-1.0.0.jar >richlite-menu-1.0.0.jar.sha256)
-          gh release create v0.4.1 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --title 'RichLite 0.4.1 · 原生全局菜单' --notes-file native-menu/release-notes.md
-          gh release upload v0.4.1 --repo "$GITHUB_REPOSITORY" native-menu/out/*.zip native-menu/out/*.zip.sha256 native-menu/richlite-menu-1.0.0.jar native-menu/richlite-menu-1.0.0.jar.sha256
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/v0.4.1" >native-menu/published.json
+          if [ -z "$RELEASE_ID" ]; then
+            gh release create v0.4.1 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --title 'RichLite 0.4.1 · 原生全局菜单' --notes-file native-menu/release-notes.md
+            gh release upload v0.4.1 --repo "$GITHUB_REPOSITORY" native-menu/out/*.zip native-menu/out/*.zip.sha256 native-menu/richlite-menu-1.0.0.jar native-menu/richlite-menu-1.0.0.jar.sha256
+            RELEASE_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq '.[] | select(.tag_name=="v0.4.1") | .id' | head -n 1)
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" >native-menu/published.json
           python3 - <<'PY'
           import json,hashlib,pathlib
           root=pathlib.Path('native-menu')
@@ -51,3 +51,4 @@ jobs:
           path: |
             native-menu/out/build-results.json
             native-menu/published.json
+
