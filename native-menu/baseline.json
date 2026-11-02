@@ -1,0 +1,17 @@
+{
+  "build_at": "2026-11-03T01:52:09.365076+09:00",
+  "packages": [
+    {
+      "filename": "RichLite-0.4.0-Lite-Launcher-import.zip",
+      "tier": "lite",
+      "sha256": "4f5099c3ce8cbd0b68980de4109aa7f04c7de465f537cc3579da180ba1e4f161",
+      "bytes": 226921557
+    },
+    {
+      "filename": "RichLite-0.4.0-Regular-Windows-macOS-Linux-oneclick.zip",
+      "tier": "regular",
+      "sha256": "b4d250d29ef906fc06cd0c9b8921e898600cb2fbdcfd88e111042d0e80c7362d",
+      "bytes": 282856063
+    }
+  ]
+}

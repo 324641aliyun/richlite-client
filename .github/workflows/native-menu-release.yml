@@ -1,0 +1,53 @@
+name: Publish native menu client update 0.4.1
+on:
+  push:
+    branches: [main]
+    paths: ['native-menu/**', '.github/workflows/native-menu-release.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  package-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rebuild new archives from exact public inputs
+        run: python3 native-menu/build_release.py
+      - name: Publish verified artifacts as a new release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view v0.4.1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Release v0.4.1 already exists; refusing to replace assets.'
+            exit 1
+          fi
+          (cd native-menu && sha256sum richlite-menu-1.0.0.jar >richlite-menu-1.0.0.jar.sha256)
+          gh release create v0.4.1 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --title 'RichLite 0.4.1 · 原生全局菜单' --notes-file native-menu/release-notes.md
+          gh release upload v0.4.1 --repo "$GITHUB_REPOSITORY" native-menu/out/*.zip native-menu/out/*.zip.sha256 native-menu/richlite-menu-1.0.0.jar native-menu/richlite-menu-1.0.0.jar.sha256
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/v0.4.1" >native-menu/published.json
+          python3 - <<'PY'
+          import json,hashlib,pathlib
+          root=pathlib.Path('native-menu')
+          release=json.loads((root/'published.json').read_text())
+          rows=json.loads((root/'out/build-results.json').read_text())
+          expected={r['filename']:r['sha256'] for r in rows}
+          expected['richlite-menu-1.0.0.jar']=hashlib.sha256((root/'richlite-menu-1.0.0.jar').read_bytes()).hexdigest()
+          assets={a['name']:a for a in release['assets']}
+          for name,digest in expected.items():
+              assert assets[name]['digest']=='sha256:'+digest,(name,'digest mismatch')
+              assert name+'.sha256' in assets
+          assert len(assets)==6
+          print('All GitHub asset digests verified; ready to publish.')
+          PY
+          gh release edit v0.4.1 --repo "$GITHUB_REPOSITORY" --draft=false --latest
+      - name: Retain public build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-menu-release-proof
+          retention-days: 7
+          path: |
+            native-menu/out/build-results.json
+            native-menu/published.json
