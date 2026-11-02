@@ -1,0 +1,108 @@
+name: RichLite one-shot desktop launcher acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      qa_tag:
+        description: Draft release containing the candidate
+        required: true
+        default: qa-richlite-0.4.0
+      asset_name:
+        description: Exact regular ZIP asset name
+        required: true
+        default: RichLite-0.4.0-Regular-Windows-macOS-Linux-oneclick.zip
+      sha256:
+        description: Expected ZIP SHA256 from the local build
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  launch-environment:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-15-intel, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - name: Download the exact candidate using read-only repository access
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          QA_TAG: ${{ inputs.qa_tag }}
+          ASSET_NAME: ${{ inputs.asset_name }}
+          EXPECTED_SHA256: ${{ inputs.sha256 }}
+        run: |
+          python - <<'PY'
+          import os,json,subprocess,hashlib,zipfile,pathlib
+          repo=os.environ['REPOSITORY']
+          releases=json.loads(subprocess.check_output(['gh','api','repos/'+repo+'/releases']))
+          release=next(r for r in releases if r['tag_name']==os.environ['QA_TAG'])
+          asset=next(a for a in release['assets'] if a['name']==os.environ['ASSET_NAME'])
+          with open('candidate.zip','wb') as f:
+              subprocess.run(['gh','api','-H','Accept: application/octet-stream','repos/'+repo+'/releases/assets/'+str(asset['id'])],stdout=f,check=True)
+          actual=hashlib.sha256(pathlib.Path('candidate.zip').read_bytes()).hexdigest()
+          assert actual==os.environ['EXPECTED_SHA256'],(actual,'ZIP digest mismatch')
+          root=pathlib.Path('client-中文 path').resolve();root.mkdir()
+          with zipfile.ZipFile('candidate.zip') as z:
+              assert z.testzip() is None
+              for e in z.infolist():
+                  p=root/e.filename
+                  assert p.resolve().is_relative_to(root)
+                  z.extract(e,root)
+                  if os.name!='nt' and not e.is_dir():os.chmod(p,(e.external_attr>>16)&0o777)
+          print(json.dumps({'zip_sha256':actual,'extracted':True,'os':os.name}))
+          PY
+      - name: Windows exact double-click entry, Java bootstrap and full preparation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & '.\client-中文 path\Start-Windows.cmd' -CheckOnly
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\client-中文 path\Start-Windows.cmd' -PrepareOnly
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: macOS exact command entry, architecture runtime and full preparation
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          './client-中文 path/Start-macOS.command' --self-test
+          './client-中文 path/Start-macOS.command' --prepare-only
+      - name: Linux exact shell entry and full preparation
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          './client-中文 path/Start-Linux.sh' --self-test
+          './client-中文 path/Start-Linux.sh' --prepare-only
+          sudo apt-get update -qq
+          sudo apt-get install -y desktop-file-utils
+          desktop-file-validate './client-中文 path/Start-Linux.desktop'
+      - name: Save non-sensitive launch proof
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib,json,platform,hashlib
+          root=pathlib.Path('client-中文 path')
+          spec=json.loads((root/'launcher/package.json').read_text(encoding='utf-8'))
+          versions=list((root/'runtime/minecraft/versions').glob('neoforge-*/*.json'))
+          assert versions
+          rows=spec['mods']
+          assert all(hashlib.sha512((root/'game'/r['path']).read_bytes()).hexdigest()==r['sha512'] for r in rows)
+          assert (root/'runtime/minecraft/.neoforge-21.1.251-ready').exists()
+          pathlib.Path('launcher-proof.json').write_text(json.dumps({'os':platform.system(),'arch':platform.machine(),'mods_verified':len(rows),'neoforge_installed':True,'credentials_used':False,'gameplay_tested':False},indent=2))
+          PY
+      - name: Retain small validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-proof-${{ matrix.os }}
+          retention-days: 2
+          if-no-files-found: ignore
+          path: |
+            launcher-proof.json
+            client-中文 path/runtime/neoforge-install-*.log
