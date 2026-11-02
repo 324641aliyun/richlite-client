@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       qa_tag:
-        description: Draft release containing the candidate
+        description: QA release containing the candidate
         required: true
         default: qa-richlite-0.4.0
       asset_name:
@@ -14,6 +14,12 @@ on:
       sha256:
         description: Expected ZIP SHA256 from the local build
         required: true
+      overlay_asset:
+        description: Optional small overlay whose final file tree is fully verified
+        required: false
+      overlay_sha256:
+        description: Exact overlay SHA256 when an overlay is used
+        required: false
 
 permissions:
   contents: read
@@ -38,6 +44,8 @@ jobs:
           QA_TAG: ${{ inputs.qa_tag }}
           ASSET_NAME: ${{ inputs.asset_name }}
           EXPECTED_SHA256: ${{ inputs.sha256 }}
+          OVERLAY_ASSET: ${{ inputs.overlay_asset }}
+          OVERLAY_SHA256: ${{ inputs.overlay_sha256 }}
         run: |
           python - <<'PY'
           import os,json,subprocess,hashlib,zipfile,pathlib
@@ -57,6 +65,23 @@ jobs:
                   assert p.resolve().is_relative_to(root)
                   z.extract(e,root)
                   if os.name!='nt' and not e.is_dir():os.chmod(p,(e.external_attr>>16)&0o777)
+          if os.environ.get('OVERLAY_ASSET'):
+              asset=next(a for a in release['assets'] if a['name']==os.environ['OVERLAY_ASSET'])
+              with open('overlay.zip','wb') as f:
+                  subprocess.run(['gh','api','-H','Accept: application/octet-stream','repos/'+repo+'/releases/assets/'+str(asset['id'])],stdout=f,check=True)
+              assert hashlib.sha256(pathlib.Path('overlay.zip').read_bytes()).hexdigest()==os.environ['OVERLAY_SHA256']
+              with zipfile.ZipFile('overlay.zip') as overlay:
+                  assert overlay.testzip() is None
+                  final=json.loads(overlay.read('_qa-final-files.json'))
+                  for e in overlay.infolist():
+                      if e.filename=='_qa-final-files.json':continue
+                      p=root/e.filename
+                      assert p.resolve().is_relative_to(root)
+                      overlay.extract(e,root)
+                      if os.name!='nt' and not e.is_dir():os.chmod(p,(e.external_attr>>16)&0o777)
+              assert set(p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file())==set(final['files'])
+              assert all(hashlib.sha256((root/n).read_bytes()).hexdigest()==digest for n,digest in final['files'].items())
+              pathlib.Path('final-files-verified.json').write_text(json.dumps({'final_zip_sha256':final['finalZipSha256'],'all_final_files_match':True,'files':len(final['files'])},indent=2))
           print(json.dumps({'zip_sha256':actual,'extracted':True,'os':os.name}))
           PY
       - name: Windows exact double-click entry, Java bootstrap and full preparation
@@ -105,4 +130,5 @@ jobs:
           if-no-files-found: ignore
           path: |
             launcher-proof.json
+            final-files-verified.json
             client-中文 path/runtime/neoforge-install-*.log
